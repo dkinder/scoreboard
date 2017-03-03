@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"html/template"
 	"io/ioutil"
@@ -8,11 +9,6 @@ import (
 	"net/http"
 	"os"
 )
-
-var PLAYER1_FILE = "/var/tmp/player1.txt"
-var PLAYER2_FILE = "/var/tmp/player2.txt"
-var SCORE1_FILE = "/var/tmp/score1.txt"
-var SCORE2_FILE = "/var/tmp/score2.txt"
 
 func check(e error) {
 	if e != nil {
@@ -23,20 +19,39 @@ func check(e error) {
 type Players struct {
 	Player1 string
 	Score1  string
+	File1   string
 	Player2 string
 	Score2  string
+	File2   string
+	List    []string
 }
 
 var player string
 
 func scoreboard(w http.ResponseWriter, r *http.Request) {
-	dat1, err := ioutil.ReadFile(PLAYER1_FILE)
+
+	list, errs := os.Open("./players.txt")
+	check(errs)
+
+	var lines []string
+	scanner := bufio.NewScanner(list)
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	var files [4]string
+	files[0] = "/var/tmp/player1.txt"
+	files[1] = "/var/tmp/player2.txt"
+	files[2] = "/var/tmp/score1.txt"
+	files[3] = "/var/tmp/score2.txt"
+
+	dat1, err := ioutil.ReadFile(files[0])
 	check(err)
-	dat2, err := ioutil.ReadFile(PLAYER2_FILE)
+	dat2, err := ioutil.ReadFile(files[1])
 	check(err)
-	dat3, err := ioutil.ReadFile(SCORE1_FILE)
+	dat3, err := ioutil.ReadFile(files[2])
 	check(err)
-	dat4, err := ioutil.ReadFile(SCORE2_FILE)
+	dat4, err := ioutil.ReadFile(files[3])
 	check(err)
 	if r.Method == "GET" {
 		player := Players{
@@ -44,6 +59,7 @@ func scoreboard(w http.ResponseWriter, r *http.Request) {
 			Player2: string(dat2),
 			Score1:  string(dat3),
 			Score2:  string(dat4),
+			List:    lines,
 		}
 		t, err := template.ParseFiles("scoreboard.gtpl")
 		check(err)
@@ -55,20 +71,22 @@ func scoreboard(w http.ResponseWriter, r *http.Request) {
 			Player2: r.FormValue("player2"),
 			Score1:  r.FormValue("score1"),
 			Score2:  r.FormValue("score2"),
+			List:    lines,
 		}
 
 		r.ParseForm()
 		t, err := template.ParseFiles("scoreboard.gtpl")
+		check(err)
 		t.Execute(w, player)
 		check(err)
 		//Write values to file
-		f1, err := os.OpenFile(PLAYER1_FILE, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0655)
+		f1, err := os.OpenFile(files[0], os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0655)
 		check(err)
-		f2, err := os.OpenFile(PLAYER2_FILE, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0655)
+		f2, err := os.OpenFile(files[1], os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0655)
 		check(err)
-		f3, err := os.OpenFile(SCORE1_FILE, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0655)
+		f3, err := os.OpenFile(files[2], os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0655)
 		check(err)
-		f4, err := os.OpenFile(SCORE2_FILE, os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0655)
+		f4, err := os.OpenFile(files[3], os.O_WRONLY|os.O_TRUNC|os.O_CREATE, 0655)
 		check(err)
 		f1.WriteString(string(player.Player1))
 		f2.WriteString(string(player.Player2))
@@ -84,8 +102,10 @@ func scoreboard(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
+	port := ":9090"
 	http.HandleFunc("/scoreboard", scoreboard)
-	err := http.ListenAndServe(":9090", nil) // setting listening port
+	fmt.Printf("Listening at http://localhost%s/scoreboard", port)
+	err := http.ListenAndServe(port, nil) // setting listening port
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
